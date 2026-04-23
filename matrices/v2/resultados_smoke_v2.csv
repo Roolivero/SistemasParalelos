@@ -1,0 +1,11 @@
+algoritmo,complejidad_c,perfil,max_val,procesos_workers,tiempo_segundos_ab,tiempo_segundos_btat,speed_up_ab,eficiencia_ab,speed_up_btat,eficiencia_btat,equipo_cores,estado,error,checksum_ab,checksum_btat
+secuencial,16,cubo,64,1,0.000429,0.000379,0.979021,0.979021,1.084433,1.084433,22,ok,,52439,52439
+secuencial (tradicional),16,cubo,64,1,0.000420,0.000411,1.000000,1.000000,1.000000,1.000000,22,ok,,52439,52439
+concurrent.futures.ThreadPoolExecutor,16,cubo,64,1,0.001721,0.001557,0.244044,0.244044,0.263969,0.263969,22,ok,,52439,52439
+threading,16,cubo,64,1,0.001243,0.001194,0.337892,0.337892,0.344221,0.344221,22,ok,,52439,52439
+concurrent.futures.ProcessPoolExecutor,16,cubo,64,1,0.124795,0.011210,0.003366,0.003366,0.036664,0.036664,22,ok,,52439,52439
+numba (njit),16,cubo,64,1,,,,,,,22,error,Exit code 1: (ver salida arriba),,
+concurrent.futures.ThreadPoolExecutor,16,cubo,64,4,0.003497,0.003243,0.120103,0.030026,0.126735,0.031684,22,ok,,52439,52439
+threading,16,cubo,64,4,0.003243,0.001884,0.129510,0.032377,0.218153,0.054538,22,ok,,52439,52439
+concurrent.futures.ProcessPoolExecutor,16,cubo,64,4,0.130804,0.016320,0.003211,0.000803,0.025184,0.006296,22,ok,,52439,52439
+numba (njit),16,cubo,64,4,,,,,,,22,error,Exit code 1: (ver salida arriba),,

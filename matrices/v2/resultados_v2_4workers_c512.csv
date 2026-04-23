@@ -1,0 +1,7 @@
+algoritmo,complejidad_c,perfil,max_val,procesos_workers,tiempo_segundos_ab,tiempo_segundos_btat,speed_up_ab,eficiencia_ab,speed_up_btat,eficiencia_btat,equipo_cores,estado,error,checksum_ab,checksum_btat
+secuencial,512,cubo,256,1,6.589254,6.361890,1.507456,1.507456,1.561761,1.561761,22,ok,,-110463704,-110463704
+secuencial (tradicional),512,cubo,256,1,9.933010,9.935754,1.000000,1.000000,1.000000,1.000000,22,ok,,-110463704,-110463704
+concurrent.futures.ThreadPoolExecutor,512,cubo,256,4,4.083622,4.696354,2.432402,0.608100,2.115631,0.528908,22,ok,,-110463704,-110463704
+threading,512,cubo,256,4,4.145853,4.461545,2.395891,0.598973,2.226976,0.556744,22,ok,,-110463704,-110463704
+concurrent.futures.ProcessPoolExecutor,512,cubo,256,4,3.148144,3.066812,3.155196,0.788799,3.239766,0.809942,22,ok,,-110463704,-110463704
+numba (njit),512,cubo,256,4,0.536763,0.544091,18.505393,4.626348,18.261199,4.565300,22,ok,,-110463704,-110463704
