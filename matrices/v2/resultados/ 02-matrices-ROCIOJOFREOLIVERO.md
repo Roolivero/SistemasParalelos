@@ -48,6 +48,11 @@ Metricas registradas:
 
 Link al repositorio: 
 
+```bash
+https://github.com/Roolivero/SistemasParalelos
+```
+
+
 ## Experimentos
 
 En esta seccion se presentan los resultados crudos de las corridas disponibles.
