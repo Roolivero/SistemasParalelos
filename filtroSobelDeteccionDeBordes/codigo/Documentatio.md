@@ -63,21 +63,34 @@ Los bordes de la imagen quedan en 0 porque no tienen una vecindad 3x3 completa.
 La version secuencial trabaja con `bytes` y `bytearray`, no con operaciones vectorizadas ni librerias.
 Eso permite representar la imagen de forma compacta y recorrerla con bucles normales de Python.
 
-El benchmark genera la imagen sintetica con tipos basicos de Python fuera de la medicion. Eso no
-entra en los tiempos del benchmark. La parte medida de la version secuencial tampoco usa NumPy.
+La version secuencial recibe la imagen del docente ya cargada como bytes RGB. La carga/preparacion
+de la imagen queda fuera de la medicion. La parte medida de la version secuencial no usa NumPy.
 
-## Por que hay una imagen sintetica
+## Imagenes de entrada
+se usan las siguientes imagenes: 
 
-No habia una imagen base en la carpeta. Para que las corridas sean reproducibles, el script genera
-una imagen RGB sintetica del tamanio pedido. Esa imagen tiene:
+```text
+filtroSobelDeteccionDeBordes/imagenes/
+```
 
-- un rectangulo;
-- una banda vertical;
-- un cuadrado central;
-- una linea diagonal.
+Los archivos disponibles son:
 
-Asi hay bordes reales para detectar y todos los metodos reciben la misma entrada si se usa el mismo
-`--size` y el mismo `--seed`.
+```text
+IMG_0358_750x750.jpg
+IMG_0358_1500x1500.jpg
+IMG_0358_3000x3000.jpg
+IMG_0358_6000x6000.jpg
+```
+
+El benchmark usa esas imagenes por defecto. La carga de la imagen queda fuera del tiempo medido;
+lo que se mide sigue siendo solamente:
+
+- conversion RGB->gris;
+- aplicacion de Sobel.
+
+La carga de JPG y el guardado PNG usan Pillow, pero esas operaciones no forman parte del benchmark.
+La imagen resultante del filtro Sobel se guarda aparte en `resultados/imagenes_sobel/`, tambien
+fuera de la medicion.
 
 ## Relacion con el libro
 
@@ -153,7 +166,7 @@ Desde esta carpeta:
 cd /home/ro/Desktop/facu/SistemasParalelos/filtroSobelDeteccionDeBordes/codigo
 ```
 
-Para correr todo lo de la entrega 1 en un solo tamanio:
+Para correr todo lo de la entrega 1 en un solo tamaño:
 
 ```bash
 python benchmark_sobel.py --size 750 --methods secuencial,numpy,numba_cpu --runs 5
@@ -167,7 +180,7 @@ python benchmark_sobel.py --size 750 --methods numpy --runs 5
 python benchmark_sobel.py --size 750 --methods numba_cpu --runs 5 --workers 8
 ```
 
-Para los tamanios de la consigna, repetir cambiando `--size`:
+Para los tamaños de la consigna, repetir cambiando `--size`:
 
 ```bash
 python benchmark_sobel.py --size 1500 --methods secuencial,numpy,numba_cpu --runs 5
@@ -185,7 +198,7 @@ Los resultados se guardan en:
 filtroSobelDeteccionDeBordes/resultados/
 ```
 
-Por cada tamanio se genera:
+Por cada tamaño se genera:
 
 ```text
 resultados_sobel_750x750.csv
@@ -200,8 +213,18 @@ parciales/resultado_parcial_750x750_numpy.md
 parciales/resultado_parcial_750x750_numba_cpu.md
 ```
 
-El Markdown por tamanio sirve para armar la tabla del informe final. Los parciales sirven para
+El Markdown por tamaño sirve para armar la tabla del informe final. Los parciales sirven para
 guardar lo que se corrio paso a paso.
+
+Tambien se guarda una imagen PNG de salida Sobel por metodo y tamaño:
+
+```text
+resultados/imagenes_sobel/sobel_750x750_secuencial.png
+resultados/imagenes_sobel/sobel_750x750_numpy.png
+resultados/imagenes_sobel/sobel_750x750_numba_cpu.png
+```
+
+El PNG se guarda fuera de la medicion para no afectar los tiempos del benchmark.
 
 ## Finales por metodo
 
@@ -221,5 +244,5 @@ python generar_finales_sobel.py
 ```
 
 Esos finales incluyen la tabla **Blancos normalizados por escala**. Esa tabla divide los pixeles
-blancos por el crecimiento del lado de la imagen respecto del tamanio base. Sirve para comparar
+blancos por el crecimiento del lado de la imagen respecto del tamaño base. Sirve para comparar
 contornos de forma mas justa, porque los bordes crecen como lineas y no como area completa.

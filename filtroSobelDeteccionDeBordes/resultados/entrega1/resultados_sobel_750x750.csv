@@ -1,0 +1,2 @@
+timestamp,method_key,method_label,size,runs,workers,seed,rgb_to_gray_s,sobel_s,total_s,white_percent,white_pixels,total_pixels,checksum,output_hash,status,error
+2026-05-07T16:57:39,secuencial,secuencial,750,5,1,2026,0.087377690,0.286956798,0.374334488,0.281777778,1585,562500,7145137,e330e8a405b66425,ok,

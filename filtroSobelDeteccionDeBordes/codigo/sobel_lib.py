@@ -94,59 +94,26 @@ def validate_size(value: str | int) -> int:
     return size
 
 
-def build_synthetic_rgb(size: int, seed: int) -> bytes:
-    """Genera una imagen RGB reproducible usando solo tipos basicos de Python."""
-    width = size
-    height = size
-    row_stride = width * 3
-    rgb = bytearray(height * row_stride)
+def input_image_path(input_dir: Path, size: int) -> Path:
+    return input_dir / f"IMG_0358_{size}x{size}.jpg"
 
-    base_pixel = bytes(((18 + seed) & 255, (24 + seed // 3) & 255, (31 + seed // 7) & 255))
-    base_row = base_pixel * width
-    for row in range(height):
-        row_start = row * row_stride
-        rgb[row_start : row_start + row_stride] = base_row
 
-    center_x = width // 2
-    center_y = height // 2
-    rect_top = height // 5
-    rect_bottom = height // 2
-    rect_left = width // 7
-    rect_right = width // 3
-    band_left = (2 * width) // 3
-    band_right = min(width, band_left + max(width // 18, 1))
+def load_rgb_image_bytes(input_dir: Path, size: int) -> bytes:
+    """Carga la imagen del docente como RGB. Esta funcion se usa fuera del benchmark."""
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise RuntimeError("Falta Pillow para cargar imagenes JPG. Instalalo con: conda install pillow") from exc
 
-    rect_row = bytes((245, 35, 45)) * max(rect_right - rect_left, 0)
-    for row in range(rect_top, rect_bottom):
-        start = row * row_stride + rect_left * 3
-        rgb[start : start + len(rect_row)] = rect_row
+    path = input_image_path(input_dir, size)
+    if not path.is_file():
+        raise FileNotFoundError(f"No existe la imagen de entrada: {path}")
 
-    band_row = bytes((25, 235, 250)) * max(band_right - band_left, 0)
-    for row in range(height):
-        start = row * row_stride + band_left * 3
-        rgb[start : start + len(band_row)] = band_row
-
-    square_half = max(size // 9, 1)
-    square_top = max(center_y - square_half, 0)
-    square_bottom = min(center_y + square_half, height)
-    square_left = max(center_x - square_half, 0)
-    square_right = min(center_x + square_half, width)
-    square_row = bytes((255, 255, 245)) * max(square_right - square_left, 0)
-    for row in range(square_top, square_bottom):
-        start = row * row_stride + square_left * 3
-        rgb[start : start + len(square_row)] = square_row
-
-    line_width = max(size // 120, 1)
-    line_pixel = bytes((250, 250, 40))
-    for row in range(height):
-        col = (row * width) // height
-        left = max(col - line_width, 0)
-        right = min(col + line_width, width)
-        if left < right:
-            start = row * row_stride + left * 3
-            rgb[start : start + (right - left) * 3] = line_pixel * (right - left)
-
-    return bytes(rgb)
+    with Image.open(path) as img:
+        rgb = img.convert("RGB")
+        if rgb.size != (size, size):
+            raise ValueError(f"La imagen {path.name} mide {rgb.size}, se esperaba {(size, size)}")
+        return rgb.tobytes()
 
 
 def output_metrics(output: object) -> tuple[int, int, float, int, str]:
@@ -162,6 +129,30 @@ def output_metrics(output: object) -> tuple[int, int, float, int, str]:
     white_percent = (white_pixels / total_pixels) * 100.0 if total_pixels else 0.0
     output_hash = hashlib.sha256(raw).hexdigest()[:16]
     return white_pixels, total_pixels, white_percent, checksum, output_hash
+
+
+def sobel_image_path(output_dir: Path, size: int, method_key: str) -> Path:
+    return output_dir / "imagenes_sobel" / f"sobel_{size}x{size}_{method_key}.png"
+
+
+def write_gray_png(output: object, width: int, height: int, path: Path) -> None:
+    """Guarda una imagen gris uint8 como PNG. Esta funcion se usa fuera del benchmark."""
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise RuntimeError("Falta Pillow para guardar imagenes PNG. Instalalo con: conda install pillow") from exc
+
+    if hasattr(output, "tobytes"):
+        raw = output.tobytes()
+    else:
+        raw = bytes(output)
+
+    expected_len = width * height
+    if len(raw) != expected_len:
+        raise ValueError(f"Imagen gris invalida: se esperaban {expected_len} bytes y llegaron {len(raw)}")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.frombytes("L", (width, height), raw).save(path)
 
 
 def average_measurements(
@@ -441,6 +432,12 @@ def md_escape(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+def format_int_or_blank(value: int | None) -> str:
+    if value is None:
+        return ""
+    return str(value)
+
+
 def write_results_md(
     md_path: Path,
     title: str,
@@ -513,9 +510,9 @@ def write_results_md(
                     str(row.runs),
                     str(row.workers),
                     str(row.seed),
-                    str(row.white_pixels or ""),
-                    str(row.total_pixels or ""),
-                    str(row.checksum or ""),
+                    format_int_or_blank(row.white_pixels),
+                    format_int_or_blank(row.total_pixels),
+                    format_int_or_blank(row.checksum),
                     row.output_hash or "",
                     md_escape(row.status),
                 ]
@@ -560,7 +557,7 @@ def write_results_md(
             "## Notas",
             "",
             "- Los tiempos excluyen generacion de imagen y cualquier I/O; solo se mide conversion RGB->gris y Sobel.",
-            "- La imagen de entrada es sintetica y reproducible: mismo tamanio y seed producen los mismos pixeles.",
+            "- La imagen de entrada se carga desde imagenes/ y la carga queda fuera de la medicion.",
             "- Speed-up = tiempo total secuencial promedio / tiempo total del metodo promedio.",
             "- Performance (%) = speed-up / unidades usadas * 100. Para Numba CPU se usan los hilos configurados; para secuencial y NumPy se usa 1 unidad explicita.",
             "- Si todavia no aparece la fila secuencial, speed-up y performance quedan vacios porque falta la referencia.",
@@ -687,9 +684,9 @@ def write_method_final_md(
                     f"{row.size}x{row.size}",
                     str(row.runs),
                     str(row.workers),
-                    str(row.white_pixels or ""),
-                    str(row.total_pixels or ""),
-                    str(row.checksum or ""),
+                    format_int_or_blank(row.white_pixels),
+                    format_int_or_blank(row.total_pixels),
+                    format_int_or_blank(row.checksum),
                     row.output_hash or "",
                     md_escape(row.status),
                 ]
@@ -722,7 +719,7 @@ def write_method_final_md(
                 [
                     f"{row.size}x{row.size}",
                     format_float(factor, 2),
-                    str(row.white_pixels or ""),
+                    format_int_or_blank(row.white_pixels),
                     format_float(normalized, 2),
                     format_float(index, 2),
                 ]
@@ -769,7 +766,7 @@ def write_method_final_md(
             f"quedan cerca del valor base de `{base_size}x{base_size}`, la deteccion de contornos se mantiene estable",
             "al escalar la imagen.",
             "",
-            "Los checksums y hashes sirven como control de reproducibilidad: para una misma entrada sintetica, mismo",
+            "Los checksums y hashes sirven como control de reproducibilidad: para una misma imagen de entrada, mismo",
             "metodo y mismo tamanio, deberian mantenerse constantes entre corridas.",
             "",
             "## Archivos parciales esperados",

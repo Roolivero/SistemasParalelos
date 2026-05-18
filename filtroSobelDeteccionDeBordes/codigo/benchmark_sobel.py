@@ -18,25 +18,34 @@ from sobel_lib import (
     SummaryRow,
     aggregate_md_path_for_size,
     average_measurements,
-    build_synthetic_rgb,
     csv_path_for_size,
     environment_info,
+    load_rgb_image_bytes,
     output_metrics,
     parse_method_list,
     partial_md_path,
+    sobel_image_path,
     update_aggregate_rows,
     validate_size,
+    write_gray_png,
     write_method_final_md,
     write_results_md,
 )
 
 
-def run_sequential(size: int, runs: int, seed: int) -> tuple[SummaryRow, list[RunMeasurement]]:
+def run_sequential(
+    size: int,
+    runs: int,
+    seed: int,
+    output_dir: Path,
+    input_dir: Path,
+) -> tuple[SummaryRow, list[RunMeasurement]]:
     from sobel_secuencial import rgb_to_gray_sequential, sobel_sequential
 
-    print(f"[Progreso] secuencial {size}x{size}: generando entrada fuera de la medicion", flush=True)
-    rgb_bytes = build_synthetic_rgb(size, seed)
+    print(f"[Progreso] secuencial {size}x{size}: cargando imagen fuera de la medicion", flush=True)
+    rgb_bytes = load_rgb_image_bytes(input_dir, size)
     measurements: list[RunMeasurement] = []
+    last_sobel: object | None = None
     for run_index in range(1, runs + 1):
         print(f"[Progreso] secuencial {size}x{size} corrida {run_index}/{runs}: midiendo", flush=True)
         t0 = perf_counter()
@@ -44,6 +53,7 @@ def run_sequential(size: int, runs: int, seed: int) -> tuple[SummaryRow, list[Ru
         t1 = perf_counter()
         sobel = sobel_sequential(gray, size, size)
         t2 = perf_counter()
+        last_sobel = sobel
 
         white_pixels, total_pixels, white_percent, checksum, output_hash = output_metrics(sobel)
         measurements.append(
@@ -59,19 +69,30 @@ def run_sequential(size: int, runs: int, seed: int) -> tuple[SummaryRow, list[Ru
                 output_hash=output_hash,
             )
         )
+    if last_sobel is not None:
+        path = sobel_image_path(output_dir, size, "secuencial")
+        write_gray_png(last_sobel, size, size, path)
+        print(f"[Progreso] Imagen Sobel guardada: {path}", flush=True)
     row = average_measurements("secuencial", size, runs, 1, seed, measurements)
     return row, measurements
 
 
-def run_numpy(size: int, runs: int, seed: int) -> tuple[SummaryRow, list[RunMeasurement]]:
+def run_numpy(
+    size: int,
+    runs: int,
+    seed: int,
+    output_dir: Path,
+    input_dir: Path,
+) -> tuple[SummaryRow, list[RunMeasurement]]:
     import numpy as np
 
     from sobel_numpy import rgb_to_gray_numpy, sobel_numpy
 
-    print(f"[Progreso] NumPy {size}x{size}: generando entrada fuera de la medicion", flush=True)
-    rgb_bytes = build_synthetic_rgb(size, seed)
+    print(f"[Progreso] NumPy {size}x{size}: cargando imagen fuera de la medicion", flush=True)
+    rgb_bytes = load_rgb_image_bytes(input_dir, size)
     rgb = np.frombuffer(rgb_bytes, dtype=np.uint8).reshape((size, size, 3))
     measurements: list[RunMeasurement] = []
+    last_sobel: object | None = None
     for run_index in range(1, runs + 1):
         print(f"[Progreso] NumPy {size}x{size} corrida {run_index}/{runs}: midiendo", flush=True)
         t0 = perf_counter()
@@ -79,6 +100,7 @@ def run_numpy(size: int, runs: int, seed: int) -> tuple[SummaryRow, list[RunMeas
         t1 = perf_counter()
         sobel = sobel_numpy(gray)
         t2 = perf_counter()
+        last_sobel = sobel
 
         white_pixels, total_pixels, white_percent, checksum, output_hash = output_metrics(sobel)
         measurements.append(
@@ -94,6 +116,10 @@ def run_numpy(size: int, runs: int, seed: int) -> tuple[SummaryRow, list[RunMeas
                 output_hash=output_hash,
             )
         )
+    if last_sobel is not None:
+        path = sobel_image_path(output_dir, size, "numpy")
+        write_gray_png(last_sobel, size, size, path)
+        print(f"[Progreso] Imagen Sobel guardada: {path}", flush=True)
     row = average_measurements("numpy", size, runs, 1, seed, measurements)
     return row, measurements
 
@@ -103,6 +129,8 @@ def run_numba_cpu(
     runs: int,
     seed: int,
     workers: int | None,
+    output_dir: Path,
+    input_dir: Path,
 ) -> tuple[SummaryRow, list[RunMeasurement]]:
     import numpy as np
 
@@ -111,11 +139,12 @@ def run_numba_cpu(
     effective_workers = set_numba_workers(workers)
     print(f"[Progreso] Numba CPU: compilando kernels fuera de la medicion", flush=True)
     warmup_numba()
-    print(f"[Progreso] Numba CPU {size}x{size}: generando entrada fuera de la medicion", flush=True)
-    rgb_bytes = build_synthetic_rgb(size, seed)
+    print(f"[Progreso] Numba CPU {size}x{size}: cargando imagen fuera de la medicion", flush=True)
+    rgb_bytes = load_rgb_image_bytes(input_dir, size)
     rgb = np.frombuffer(rgb_bytes, dtype=np.uint8).reshape((size, size, 3))
 
     measurements: list[RunMeasurement] = []
+    last_sobel: object | None = None
     for run_index in range(1, runs + 1):
         print(f"[Progreso] Numba CPU {size}x{size} corrida {run_index}/{runs}: midiendo", flush=True)
         t0 = perf_counter()
@@ -123,6 +152,7 @@ def run_numba_cpu(
         t1 = perf_counter()
         sobel = sobel_numba(gray)
         t2 = perf_counter()
+        last_sobel = sobel
 
         white_pixels, total_pixels, white_percent, checksum, output_hash = output_metrics(sobel)
         measurements.append(
@@ -138,18 +168,30 @@ def run_numba_cpu(
                 output_hash=output_hash,
             )
         )
+    if last_sobel is not None:
+        path = sobel_image_path(output_dir, size, "numba_cpu")
+        write_gray_png(last_sobel, size, size, path)
+        print(f"[Progreso] Imagen Sobel guardada: {path}", flush=True)
     row = average_measurements("numba_cpu", size, runs, effective_workers, seed, measurements)
     return row, measurements
 
 
-def run_method(method_key: str, size: int, runs: int, seed: int, workers: int | None) -> tuple[SummaryRow, list[RunMeasurement]]:
+def run_method(
+    method_key: str,
+    size: int,
+    runs: int,
+    seed: int,
+    workers: int | None,
+    output_dir: Path,
+    input_dir: Path,
+) -> tuple[SummaryRow, list[RunMeasurement]]:
     try:
         if method_key == "secuencial":
-            return run_sequential(size, runs, seed)
+            return run_sequential(size, runs, seed, output_dir, input_dir)
         if method_key == "numpy":
-            return run_numpy(size, runs, seed)
+            return run_numpy(size, runs, seed, output_dir, input_dir)
         if method_key == "numba_cpu":
-            return run_numba_cpu(size, runs, seed, workers)
+            return run_numba_cpu(size, runs, seed, workers, output_dir, input_dir)
     except Exception as exc:
         row = SummaryRow(
             timestamp="",
@@ -178,6 +220,7 @@ def run_method(method_key: str, size: int, runs: int, seed: int, workers: int | 
 def main() -> None:
     base_dir = Path(__file__).resolve().parent
     default_output_dir = base_dir.parent / "resultados"
+    default_input_dir = base_dir.parent / "imagenes"
 
     parser = argparse.ArgumentParser(
         description="Ejecuta benchmarks parciales de Sobel y genera CSV/Markdown por tamanio.",
@@ -195,7 +238,7 @@ def main() -> None:
         help="Metodos separados por coma: secuencial,numpy,numba_cpu. Default: secuencial.",
     )
     parser.add_argument("--runs", type=int, default=5, help="Cantidad de corridas. Consigna: minimo 5.")
-    parser.add_argument("--seed", type=int, default=2026, help="Seed de la imagen sintetica reproducible.")
+    parser.add_argument("--seed", type=int, default=2026, help="Seed registrada en resultados para reproducibilidad.")
     parser.add_argument(
         "--workers",
         type=int,
@@ -207,6 +250,12 @@ def main() -> None:
         type=Path,
         default=default_output_dir,
         help="Carpeta de resultados Markdown/CSV.",
+    )
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        default=default_input_dir,
+        help="Carpeta con IMG_0358_<NxN>.jpg.",
     )
     parser.add_argument(
         "--allow-non-consigna-size",
@@ -224,6 +273,7 @@ def main() -> None:
         raise SystemExit(f"--size debe ser uno de la consigna ({valid}) o usar --allow-non-consigna-size")
 
     output_dir = args.output_dir.resolve()
+    input_dir = args.input_dir.resolve()
     csv_path = csv_path_for_size(output_dir, args.size)
     aggregate_md_path = aggregate_md_path_for_size(output_dir, args.size)
     env = environment_info()
@@ -233,7 +283,7 @@ def main() -> None:
 
     print(f"[Progreso] Benchmark Sobel {args.size}x{args.size} | metodos={','.join(args.methods)}", flush=True)
     for method_key in args.methods:
-        row, measurements = run_method(method_key, args.size, args.runs, args.seed, args.workers)
+        row, measurements = run_method(method_key, args.size, args.runs, args.seed, args.workers, output_dir, input_dir)
         new_rows.append(row)
         measurements_by_method[method_key] = measurements
         print(f"[Progreso] Finalizado {METHOD_LABELS[method_key]}: estado={row.status}", flush=True)

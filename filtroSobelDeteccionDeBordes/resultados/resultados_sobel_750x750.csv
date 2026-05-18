@@ -1,4 +1,0 @@
-timestamp,method_key,method_label,size,runs,workers,seed,rgb_to_gray_s,sobel_s,total_s,white_percent,white_pixels,total_pixels,checksum,output_hash,status,error
-2026-05-06T12:58:51,secuencial,secuencial,750,5,1,2026,0.083825440,0.258512202,0.342337642,0.323555556,1820,562500,1552402,9afeaa122377f409,ok,
-2026-05-06T13:30:55,numpy,NumPy,750,5,1,2026,0.001954526,0.002600320,0.004554846,0.323555556,1820,562500,1552402,9afeaa122377f409,ok,
-2026-05-06T13:31:26,numba_cpu,Numba paralelo CPU,750,5,8,2026,0.048503185,0.000313040,0.048816225,0.323555556,1820,562500,1552402,9afeaa122377f409,ok,
