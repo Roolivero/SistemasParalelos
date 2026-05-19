@@ -1,28 +1,28 @@
-# Titulo
+# Título
 
-Informe de rendimiento: filtro de Sobel para deteccion de bordes en Python
+Informe de rendimiento: filtro de Sobel para detección de bordes en Python
 
 ## Abstract
 
-En este trabajo se implementa el filtro de Sobel para deteccion de bordes sobre imagenes RGB de
-distintas resoluciones. Para esta entrega se presentan los resultados consolidados de la version
-secuencial, usando imagenes de `750x750`, `1500x1500`, `3000x3000` y `6000x6000`. En cada caso se
-realizan 5 corridas y se registran por separado el tiempo de conversion RGB a escala de grises, el
-tiempo de aplicacion del filtro Sobel, el tiempo total, el porcentaje de pixeles blancos, checksum
-y hash de salida.
+En este trabajo se implementa y compara el filtro de Sobel para detección de bordes sobre imágenes
+RGB de distintas resoluciones. Para la primera entrega se evalúan tres implementaciones:
+secuencial pura, vectorizada con NumPy y paralela en CPU con Numba. Los experimentos se ejecutan
+con imágenes de `750x750`, `1500x1500`, `3000x3000` y `6000x6000`, realizando 5 corridas por
+método y tamaño.
 
-Los resultados muestran que el costo computacional aumenta al crecer el tamaño de la imagen. Esto
-es esperable porque el algoritmo debe recorrer los pixeles interiores y aplicar una operacion sobre
-una vecindad `3x3` para cada uno de ellos. Las salidas generadas se guardan como imagenes `.png`
-para permitir la inspeccion visual del filtro aplicado.
+Se registran por separado el tiempo de conversión RGB a escala de grises, el tiempo de aplicación
+de Sobel, el tiempo total, el porcentaje de píxeles blancos, el speed-up y la performance. Los
+resultados muestran que NumPy mejora fuertemente respecto de la versión secuencial, mientras que
+Numba paralelo CPU obtiene los mejores tiempos en todos los tamaños evaluados.
 
-## Introduccion
+## Introducción
 
-El procesamiento de imagenes es una carga de trabajo adecuada para estudiar rendimiento, porque
-aplica operaciones repetitivas sobre grandes cantidades de pixeles. En este trabajo se utiliza el
-operador de Sobel, un filtro clasico para detectar bordes o contornos en una imagen.
+El procesamiento de imágenes es una carga de trabajo adecuada para estudiar técnicas de
+optimización y paralelización, ya que aplica operaciones repetitivas sobre grandes cantidades de
+píxeles. En este trabajo se utiliza el operador de Sobel, un filtro clásico para detectar bordes o
+contornos en una imagen.
 
-Sobel estima cambios de intensidad en dos direcciones mediante dos mascaras de convolucion:
+Sobel estima cambios de intensidad en dos direcciones mediante dos máscaras de convolución:
 
 ```text
 Gx = [-1  0  1]      Gy = [ 1  2  1]
@@ -30,7 +30,7 @@ Gx = [-1  0  1]      Gy = [ 1  2  1]
      [-1  0  1]           [-1 -2 -1]
 ```
 
-Para cada pixel interior se toma su vecindad `3x3`, se calculan `gx` y `gy`, y luego se obtiene la
+Para cada píxel interior se toma su vecindad `3x3`, se calculan `gx` y `gy`, y luego se obtiene la
 magnitud del gradiente:
 
 ```text
@@ -38,51 +38,75 @@ magnitud del gradiente:
 ```
 
 El resultado se recorta al rango `[0, 255]`. Los valores cercanos a 0 representan zonas sin borde
-fuerte, mientras que valores mas altos representan cambios de intensidad mas marcados. Como Sobel
-trabaja sobre una sola intensidad por pixel, antes se convierte la imagen RGB a escala de grises
+fuerte, mientras que valores más altos representan cambios de intensidad más marcados. Como Sobel
+trabaja sobre una sola intensidad por píxel, primero se convierte la imagen RGB a escala de grises
 mediante luminancia:
 
 ```text
 I = 0.299R + 0.587G + 0.114B
 ```
 
-## Metodologias
+Desde el punto de vista del paralelismo, Sobel permite comparar enfoques distintos sobre un mismo
+cálculo: bucles secuenciales, vectorización sobre arreglos completos y paralelismo explícito en CPU.
 
-Se ejecutaron experimentos de benchmarking sobre las imagenes provistas para el trabajo. La carga
-de la imagen se realiza fuera del tiempo medido, para registrar solamente el costo de computo de la
-conversion a gris y la aplicacion del filtro Sobel.
+## Metodologías
+
+Se ejecutaron experimentos de benchmarking sobre las imágenes provistas para el trabajo. La carga
+de la imagen se realiza fuera del tiempo medido, para registrar solamente el costo de cómputo de la
+conversión a gris y la aplicación del filtro Sobel.
 
 ### Entorno y hardware
 
 - CPU: AMD Ryzen 5 5600X 6-Core Processor
-  - 6 nucleos fisicos, 12 hilos logicos
-- RAM: 15.52 GiB totales, aproximadamente 8.38 GiB disponibles durante las corridas
+  - 6 núcleos físicos, 12 hilos lógicos
+- RAM: 15.52 GiB totales
 - Sistema operativo: Linux-6.18.26-1-MANJARO-x86_64-with-glibc2.43
-- Version de Python: 3.14.4 free-threading build, conda-forge
+- Python: 3.14.4 free-threading build, conda-forge
 - GIL habilitado: False
 - NumPy: 2.4.3
 - Numba: 0.65.1
-- GPU: no se utiliza en esta entrega
+- GPU CUDA: NVIDIA GeForce RTX 2060
 
 Configuraciones consideradas:
 
-- Imagenes de entrada:
+- Imágenes de entrada:
   - `IMG_0358_750x750.jpg`
   - `IMG_0358_1500x1500.jpg`
   - `IMG_0358_3000x3000.jpg`
   - `IMG_0358_6000x6000.jpg`
 - Tamaños de imagen: `750x750`, `1500x1500`, `3000x3000` y `6000x6000`.
-- Cantidad de corridas por tamaño: 5.
-- Metodo medido: secuencial puro.
-- Salidas generadas: imagenes Sobel en formato `.png`.
+- Cantidad de corridas por combinación: 5.
+- Métodos comparados:
+  - secuencial puro;
+  - NumPy;
+  - Numba paralelo CPU.
+- Numba CPU: 6 workers, coincidiendo con los 6 núcleos físicos del procesador.
+- Salidas generadas: imágenes Sobel en formato `.png`.
 
-Metricas registradas:
+Métricas registradas:
 
-- tiempo de conversion RGB a escala de grises;
-- tiempo de aplicacion del filtro Sobel;
+- tiempo de conversión RGB a escala de grises;
+- tiempo de aplicación del filtro Sobel;
 - tiempo total;
-- porcentaje de pixeles blancos (`valor 255`) en la imagen Sobel;
-- checksum y hash de salida como control de reproducibilidad.
+- porcentaje de píxeles blancos (`valor 255`) en la imagen Sobel;
+- speed-up respecto de la versión secuencial;
+- performance;
+- checksum y hash de salida como control.
+
+El speed-up se calcula con:
+
+```text
+speed-up = tiempo total secuencial / tiempo total del método
+```
+
+La performance se calcula como:
+
+```text
+performance (%) = speed-up / unidades usadas * 100
+```
+
+Para Numba CPU se usan los 6 workers configurados como unidades. Para secuencial y NumPy se usa
+1 unidad explícita, ya que el benchmark no administra manualmente workers en esas versiones.
 
 Link al repositorio:
 
@@ -92,121 +116,145 @@ https://github.com/Roolivero/SistemasParalelos
 
 ## Experimentos
 
-En esta seccion se presentan los resultados crudos de las corridas disponibles. Cada tabla
-corresponde a un tamaño de imagen.
-
 ### Experimento 1: imagen 750x750
 
-| Metodo | RGB->gris [s] | Sobel [s] | Total [s] | Pixeles blancos [%] | Speed-up | Performance [%] |
+| Método | RGB→gris [s] | Sobel [s] | Total [s] | Píxeles blancos [%] | Speed-up | Performance [%] |
 |---|---:|---:|---:|---:|---:|---:|
-| Secuencial | 0.087378 | 0.286957 | 0.374334 | 0.281778 | 1.000000 | 100.000000 |
+| Secuencial | 0.087378 | 0.286957 | 0.374334 | 0.281778 | 1.000000 | 100.00 |
+| NumPy | 0.001907 | 0.002542 | 0.004449 | 0.281778 | 84.132985 | 8413.30 |
+| Numba paralelo CPU | 0.000660 | 0.000338 | 0.000997 | 0.281778 | 375.331744 | 6255.53 |
 
 ### Experimento 2: imagen 1500x1500
 
-| Metodo | RGB->gris [s] | Sobel [s] | Total [s] | Pixeles blancos [%] | Speed-up | Performance [%] |
+| Método | RGB→gris [s] | Sobel [s] | Total [s] | Píxeles blancos [%] | Speed-up | Performance [%] |
 |---|---:|---:|---:|---:|---:|---:|
-| Secuencial | 0.329165 | 1.145662 | 1.474827 | 0.059956 | 1.000000 | 100.000000 |
+| Secuencial | 0.329165 | 1.145662 | 1.474827 | 0.059956 | 1.000000 | 100.00 |
+| NumPy | 0.007318 | 0.010708 | 0.018026 | 0.059956 | 81.817345 | 8181.73 |
+| Numba paralelo CPU | 0.001324 | 0.001058 | 0.002382 | 0.059956 | 619.085631 | 10318.09 |
 
 ### Experimento 3: imagen 3000x3000
 
-| Metodo | RGB->gris [s] | Sobel [s] | Total [s] | Pixeles blancos [%] | Speed-up | Performance [%] |
+| Método | RGB→gris [s] | Sobel [s] | Total [s] | Píxeles blancos [%] | Speed-up | Performance [%] |
 |---|---:|---:|---:|---:|---:|---:|
-| Secuencial | 1.315055 | 4.403400 | 5.718456 | 0.001367 | 1.000000 | 100.000000 |
+| Secuencial | 1.315055 | 4.403400 | 5.718456 | 0.001367 | 1.000000 | 100.00 |
+| NumPy | 0.033103 | 0.073703 | 0.106806 | 0.001367 | 53.540383 | 5354.04 |
+| Numba paralelo CPU | 0.004562 | 0.004740 | 0.009302 | 0.001367 | 614.785758 | 10246.43 |
 
 ### Experimento 4: imagen 6000x6000
 
-| Metodo | RGB->gris [s] | Sobel [s] | Total [s] | Pixeles blancos [%] | Speed-up | Performance [%] |
+| Método | RGB→gris [s] | Sobel [s] | Total [s] | Píxeles blancos [%] | Speed-up | Performance [%] |
 |---|---:|---:|---:|---:|---:|---:|
-| Secuencial | 5.243595 | 17.420171 | 22.663766 | 0.000000 | 1.000000 | 100.000000 |
+| Secuencial | 5.243595 | 17.420171 | 22.663766 | 0.000000 | 1.000000 | 100.00 |
+| NumPy | 0.130965 | 0.280494 | 0.411459 | 0.000000 | 55.081437 | 5508.14 |
+| Numba paralelo CPU | 0.015806 | 0.016697 | 0.032503 | 0.000000 | 697.283836 | 11621.40 |
 
 ## Resultados
 
-La version secuencial funciona como linea base del trabajo. En este enfoque, tanto la conversion
-RGB a escala de grises como la aplicacion de Sobel se resuelven con bucles Python puros, recorriendo
-los pixeles de la imagen.
+La versión secuencial es la más lenta en todos los tamaños, lo cual resulta esperable porque recorre
+los píxeles con bucles Python puros. En `6000x6000`, por ejemplo, tarda 22.663766 s, de los cuales
+17.420171 s corresponden a Sobel.
 
-El tiempo total aumenta junto con el tamaño de la imagen:
+NumPy reduce los tiempos de forma marcada al expresar el cálculo mediante operaciones
+vectorizadas. En `750x750`, el tiempo total baja de 0.374334 s a 0.004449 s. En `6000x6000`, baja
+de 22.663766 s a 0.411459 s.
 
-| Tamano | Tiempo RGB->gris [s] | Tiempo Sobel [s] | Tiempo total [s] |
-|---:|---:|---:|---:|
-| 750x750 | 0.087378 | 0.286957 | 0.374334 |
-| 1500x1500 | 0.329165 | 1.145662 | 1.474827 |
-| 3000x3000 | 1.315055 | 4.403400 | 5.718456 |
-| 6000x6000 | 5.243595 | 17.420171 | 22.663766 |
+Numba paralelo CPU obtiene el mejor rendimiento global. En `6000x6000`, el tiempo total baja a
+0.032503 s, con un speed-up de 697.283836 respecto de la versión secuencial.
 
-El filtro Sobel es la parte mas costosa del procesamiento. Esto se debe a que para cada pixel
-interior se revisa una vecindad de 9 posiciones y se calculan dos gradientes, uno horizontal y otro
-vertical.
+### Datos de control
 
-Los datos de control obtenidos fueron:
+| Tamaño | Método | Píxeles blancos | Píxeles totales | Píxeles blancos [%] | Checksum Sobel | Hash salida |
+|---:|---|---:|---:|---:|---:|---|
+| 750x750 | Secuencial | 1585 | 562500 | 0.281778 | 7145137 | e330e8a405b66425 |
+| 750x750 | NumPy | 1585 | 562500 | 0.281778 | 7144991 | d154fb8c8a528b71 |
+| 750x750 | Numba CPU | 1585 | 562500 | 0.281778 | 7145137 | e330e8a405b66425 |
+| 1500x1500 | Secuencial | 1349 | 2250000 | 0.059956 | 18014291 | 49a177a791d110fb |
+| 1500x1500 | NumPy | 1349 | 2250000 | 0.059956 | 18013999 | f905721d22fdb912 |
+| 1500x1500 | Numba CPU | 1349 | 2250000 | 0.059956 | 18014291 | 49a177a791d110fb |
+| 3000x3000 | Secuencial | 123 | 9000000 | 0.001367 | 47883925 | a5989d2f439a9154 |
+| 3000x3000 | NumPy | 123 | 9000000 | 0.001367 | 47883024 | a92d650778fbd8bf |
+| 3000x3000 | Numba CPU | 123 | 9000000 | 0.001367 | 47883925 | a5989d2f439a9154 |
+| 6000x6000 | Secuencial | 0 | 36000000 | 0.000000 | 109936717 | d8af6b4c711617e3 |
+| 6000x6000 | NumPy | 0 | 36000000 | 0.000000 | 109935099 | 58d0001f7448e5ed |
+| 6000x6000 | Numba CPU | 0 | 36000000 | 0.000000 | 109936717 | d8af6b4c711617e3 |
 
-| Tamano | Pixeles blancos | Pixeles totales | Pixeles blancos [%] | Checksum Sobel | Hash salida |
-|---:|---:|---:|---:|---:|---|
-| 750x750 | 1585 | 562500 | 0.281778 | 7145137 | e330e8a405b66425 |
-| 1500x1500 | 1349 | 2250000 | 0.059956 | 18014291 | 49a177a791d110fb |
-| 3000x3000 | 123 | 9000000 | 0.001367 | 47883925 | a5989d2f439a9154 |
-| 6000x6000 | 0 | 36000000 | 0.000000 | 109936717 | d8af6b4c711617e3 |
+Los tres métodos producen el mismo porcentaje de píxeles blancos para cada tamaño. Los checksums
+de NumPy presentan pequeñas diferencias respecto de secuencial y Numba CPU, atribuibles a
+diferencias de redondeo en el cálculo vectorizado. Para la métrica solicitada por la consigna, las
+salidas son equivalentes.
 
-La columna de pixeles blancos cuenta solamente los pixeles cuyo valor final es exactamente `255`.
-Por eso, en la imagen de `6000x6000` el valor es 0: la salida Sobel contiene bordes en tonos de
-gris, pero ningun pixel llega al blanco puro. Esto no significa que la salida este vacia; el checksum
-distinto de cero confirma que existen valores de intensidad en la imagen resultante.
+## Análisis
 
-## Analisis
+### 1. Diferencias de tiempo entre secuencial, NumPy y Numba CPU
 
-### Crecimiento del tiempo
+La diferencia de tiempo es muy marcada. La versión secuencial queda limitada por el costo de los
+bucles Python. NumPy mejora al usar operaciones vectorizadas sobre arreglos completos, mientras
+que Numba CPU compila los bucles y reparte trabajo mediante paralelismo en CPU.
 
-Al duplicar el lado de la imagen, la cantidad total de pixeles se multiplica por cuatro. Por eso el
-tiempo crece de forma cercana al crecimiento del area. La imagen `6000x6000` tiene 64 veces mas
-pixeles que la imagen `750x750`, y el tiempo total pasa de 0.374334 s a 22.663766 s.
+En todos los tamaños, Numba CPU fue el método más rápido. La ventaja se vuelve especialmente
+clara en imágenes grandes: para `6000x6000`, secuencial tarda 22.663766 s, NumPy tarda 0.411459 s
+y Numba CPU tarda 0.032503 s.
 
-La relacion entre tamaño y costo se observa con claridad en la etapa Sobel:
+### 2. Evolución del speed-up
 
-| Tamano | Pixeles totales | Tiempo Sobel [s] |
+| Tamaño | Speed-up NumPy | Speed-up Numba CPU |
 |---:|---:|---:|
-| 750x750 | 562500 | 0.286957 |
-| 1500x1500 | 2250000 | 1.145662 |
-| 3000x3000 | 9000000 | 4.403400 |
-| 6000x6000 | 36000000 | 17.420171 |
+| 750x750 | 84.132985 | 375.331744 |
+| 1500x1500 | 81.817345 | 619.085631 |
+| 3000x3000 | 53.540383 | 614.785758 |
+| 6000x6000 | 55.081437 | 697.283836 |
 
-### Conversion RGB a gris
+El speed-up de NumPy es alto en todos los casos, pero no crece de manera sostenida con el tamaño.
+Se mantiene entre aproximadamente 53x y 84x.
 
-La conversion RGB a escala de grises tambien crece con el tamaño de la imagen. Esta etapa toma los
-canales rojo, verde y azul de cada pixel y calcula una sola intensidad usando la formula de
-luminancia. Aunque es menos costosa que Sobel, tambien debe recorrer todos los pixeles.
+El speed-up de Numba CPU es mayor y tiende a ser más favorable en imágenes medianas y grandes.
+Esto indica que el costo inicial de usar una versión compilada y paralela se amortiza mejor cuando
+hay más píxeles para procesar.
 
-### Pixeles blancos y deteccion de bordes
+Las performances mayores al 100% no representan eficiencia paralela ideal pura. En este caso, el
+baseline es una versión Python secuencial pura, mientras que NumPy y Numba también cambian el
+modo de ejecución mediante vectorización, compilación y mejor aprovechamiento del hardware.
 
-El porcentaje de pixeles blancos no mide todos los bordes detectados, sino solo los puntos donde la
-magnitud del gradiente alcanza el valor maximo `255`. Una imagen puede tener bordes visibles en la
-salida Sobel aunque el conteo de blancos puros sea bajo o incluso cero.
+### 3. Equivalencia de resultados
 
-Por este motivo, el porcentaje de blancos se usa como dato de control, pero no como unica medida de
-calidad visual. Los archivos `.png` generados permiten verificar la salida del filtro de manera
-directa.
+Los porcentajes de píxeles blancos coinciden entre los tres métodos en todos los tamaños:
+
+| Tamaño | % blancos |
+|---:|---:|
+| 750x750 | 0.281778 |
+| 1500x1500 | 0.059956 |
+| 3000x3000 | 0.001367 |
+| 6000x6000 | 0.000000 |
+
+Esto permite comparar los tiempos de manera consistente. Las pequeñas diferencias de checksum en
+NumPy no cambian la métrica principal de la consigna ni la salida visual esperada.
+
+En `6000x6000`, el porcentaje de píxeles blancos es 0 porque ningún píxel llega exactamente al
+valor 255. Esto no significa que no haya bordes: la imagen Sobel contiene valores de gris, pero no
+bordes saturados al blanco puro.
 
 ## Conclusiones
 
-La implementacion secuencial permite establecer una linea base clara para el filtro de Sobel. El
-tiempo de ejecucion aumenta al crecer la cantidad de pixeles, lo cual coincide con la naturaleza del
-algoritmo: se realiza trabajo por cada pixel interior de la imagen.
+La implementación secuencial funciona como línea base y muestra el costo de resolver Sobel con
+bucles Python puros. Sus tiempos crecen junto con la cantidad de píxeles de la imagen.
 
-La etapa Sobel representa la mayor parte del tiempo total, porque requiere aplicar las mascaras `Gx`
-y `Gy` sobre una vecindad `3x3`. La conversion RGB a gris tambien escala con el tamaño, pero tiene
-menor costo relativo.
+NumPy ofrece una aceleración importante sin administrar workers manualmente. Su ventaja proviene
+de la vectorización sobre arreglos completos y de evitar bucles Python explícitos.
 
-Los resultados muestran que el algoritmo produce salidas reproducibles para cada tamaño. Los
-checksums y hashes se registran como control para poder comparar futuras implementaciones, como
-versiones vectorizadas con NumPy o paralelas con Numba, contra la misma salida de referencia.
+Numba paralelo CPU logra el mejor rendimiento de la primera entrega. Al compilar los bucles y
+repartir trabajo entre 6 workers, reduce de forma muy significativa el tiempo total frente a las otras
+dos implementaciones.
+
+Finalmente, los tres métodos producen resultados equivalentes según el porcentaje de píxeles
+blancos solicitado por la consigna. Esto permite atribuir las diferencias observadas al enfoque de
+ejecución y optimización, no a un cambio en el objetivo del algoritmo.
 
 ## Archivos de resultados usados
 
 - `resultados/entrega1/finales/resultado_final_secuencial.md`
+- `resultados/entrega1/finales/resultado_final_numpy.md`
+- `resultados/entrega1/finales/resultado_final_numba_cpu.md`
 - `resultados/entrega1/resultados_sobel_750x750.csv`
 - `resultados/entrega1/resultados_sobel_1500x1500.csv`
 - `resultados/entrega1/resultados_sobel_3000x3000.csv`
 - `resultados/entrega1/resultados_sobel_6000x6000.csv`
-- `resultados/entrega1/imagenes_sobel/sobel_750x750_secuencial.png`
-- `resultados/entrega1/imagenes_sobel/sobel_1500x1500_secuencial.png`
-- `resultados/entrega1/imagenes_sobel/sobel_3000x3000_secuencial.png`
-- `resultados/entrega1/imagenes_sobel/sobel_6000x6000_secuencial.png`

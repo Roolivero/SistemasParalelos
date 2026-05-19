@@ -246,3 +246,46 @@ python generar_finales_sobel.py
 Esos finales incluyen la tabla **Blancos normalizados por escala**. Esa tabla divide los pixeles
 blancos por el crecimiento del lado de la imagen respecto del tamaño base. Sirve para comparar
 contornos de forma mas justa, porque los bordes crecen como lineas y no como area completa.
+# Entrega 2: Numba GPU
+
+Para la segunda entrega se agrega el metodo `numba_gpu`, basado en `numba.cuda`.
+La idea sigue el codigo compartido por el docente:
+
+- se usa una grilla 2D de bloques e hilos;
+- cada hilo procesa un pixel de la imagen;
+- primero se ejecuta un kernel para convertir RGB a gris;
+- despues se ejecuta otro kernel para aplicar Sobel;
+- se llama a `cuda.synchronize()` antes de cerrar cada medicion, porque los kernels CUDA se lanzan de forma asincronica.
+
+Los tiempos solicitados por la consigna siguen siendo:
+
+- RGB -> gris;
+- Sobel;
+- total de computo.
+
+Ademas, para poder responder el analisis de la entrega 2, el benchmark registra aparte:
+
+- transferencia CPU -> GPU;
+- transferencia GPU -> CPU;
+- transferencia total.
+
+Esos tiempos de transferencia no se suman en la columna `tiempo total (s)` de la tabla solicitada,
+pero sirven para explicar en que tamanios se amortiza el costo de mover datos entre CPU y GPU.
+
+## Comandos para ejecutar entrega 2
+
+Desde la carpeta `codigo`:
+
+```bash
+python benchmark_sobel.py --size 750 --methods numba_cpu,numba_gpu --runs 5 --workers 6 --output-dir ../resultados/entrega2
+python benchmark_sobel.py --size 1500 --methods numba_cpu,numba_gpu --runs 5 --workers 6 --output-dir ../resultados/entrega2
+python benchmark_sobel.py --size 3000 --methods numba_cpu,numba_gpu --runs 5 --workers 6 --output-dir ../resultados/entrega2
+python benchmark_sobel.py --size 6000 --methods numba_cpu,numba_gpu --runs 5 --workers 6 --output-dir ../resultados/entrega2
+```
+
+Se incluye `numba_cpu` en la misma carpeta de resultados para poder comparar directamente contra
+`numba_gpu`, que es lo que pide la entrega del 21 de mayo.
+
+Se usa `--workers 6` en Numba CPU porque el procesador tiene 6 nucleos fisicos. Aunque el sistema
+muestre 12 hilos logicos, esos hilos comparten recursos internos de los mismos nucleos, por lo que
+6 workers es una configuracion mas conservadora y facil de justificar en el informe.

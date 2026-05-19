@@ -18,6 +18,7 @@ METHOD_LABELS = {
     "secuencial": "secuencial",
     "numpy": "NumPy",
     "numba_cpu": "Numba paralelo CPU",
+    "numba_gpu": "Numba GPU",
 }
 
 
@@ -32,6 +33,9 @@ class RunMeasurement:
     white_percent: float
     checksum: int
     output_hash: str
+    transfer_h2d_s: float | None = None
+    transfer_d2h_s: float | None = None
+    transfer_total_s: float | None = None
 
 
 @dataclass
@@ -53,6 +57,9 @@ class SummaryRow:
     output_hash: str | None
     status: str
     error: str
+    transfer_h2d_s: float | None = None
+    transfer_d2h_s: float | None = None
+    transfer_total_s: float | None = None
 
 
 CSV_FIELDS = [
@@ -66,6 +73,9 @@ CSV_FIELDS = [
     "rgb_to_gray_s",
     "sobel_s",
     "total_s",
+    "transfer_h2d_s",
+    "transfer_d2h_s",
+    "transfer_total_s",
     "white_percent",
     "white_pixels",
     "total_pixels",
@@ -193,6 +203,9 @@ def average_measurements(
     sobel_s = sum(m.sobel_s for m in measurements) / n
     total_s = sum(m.total_s for m in measurements) / n
     white_percent = sum(m.white_percent for m in measurements) / n
+    h2d_values = [m.transfer_h2d_s for m in measurements if m.transfer_h2d_s is not None]
+    d2h_values = [m.transfer_d2h_s for m in measurements if m.transfer_d2h_s is not None]
+    transfer_values = [m.transfer_total_s for m in measurements if m.transfer_total_s is not None]
     last = measurements[-1]
     return SummaryRow(
         timestamp=timestamp,
@@ -205,6 +218,9 @@ def average_measurements(
         rgb_to_gray_s=rgb_to_gray_s,
         sobel_s=sobel_s,
         total_s=total_s,
+        transfer_h2d_s=(sum(h2d_values) / len(h2d_values)) if h2d_values else None,
+        transfer_d2h_s=(sum(d2h_values) / len(d2h_values)) if d2h_values else None,
+        transfer_total_s=(sum(transfer_values) / len(transfer_values)) if transfer_values else None,
         white_percent=white_percent,
         white_pixels=last.white_pixels,
         total_pixels=last.total_pixels,
@@ -296,7 +312,21 @@ def environment_info() -> dict[str, str]:
         "gil_enabled": str(gil_value),
         "numpy": package_version("numpy"),
         "numba": package_version("numba"),
+        "gpu_cuda": gpu_cuda_info(),
     }
+
+
+def gpu_cuda_info() -> str:
+    try:
+        from numba import cuda
+
+        if not cuda.is_available():
+            return "CUDA no disponible"
+        device = cuda.get_current_device()
+        name = device.name.decode() if isinstance(device.name, bytes) else device.name
+        return str(name)
+    except Exception as exc:
+        return f"no detectada ({exc})"
 
 
 def csv_path_for_size(output_dir: Path, size: int) -> Path:
@@ -327,6 +357,9 @@ def _summary_to_csv_row(row: SummaryRow) -> dict[str, str]:
         "rgb_to_gray_s": f"{row.rgb_to_gray_s:.9f}" if row.rgb_to_gray_s is not None else "",
         "sobel_s": f"{row.sobel_s:.9f}" if row.sobel_s is not None else "",
         "total_s": f"{row.total_s:.9f}" if row.total_s is not None else "",
+        "transfer_h2d_s": f"{row.transfer_h2d_s:.9f}" if row.transfer_h2d_s is not None else "",
+        "transfer_d2h_s": f"{row.transfer_d2h_s:.9f}" if row.transfer_d2h_s is not None else "",
+        "transfer_total_s": f"{row.transfer_total_s:.9f}" if row.transfer_total_s is not None else "",
         "white_percent": f"{row.white_percent:.9f}" if row.white_percent is not None else "",
         "white_pixels": str(row.white_pixels) if row.white_pixels is not None else "",
         "total_pixels": str(row.total_pixels) if row.total_pixels is not None else "",
@@ -356,6 +389,9 @@ def _csv_row_to_summary(row: dict[str, str]) -> SummaryRow:
         rgb_to_gray_s=f(row.get("rgb_to_gray_s", "")),
         sobel_s=f(row.get("sobel_s", "")),
         total_s=f(row.get("total_s", "")),
+        transfer_h2d_s=f(row.get("transfer_h2d_s", "")),
+        transfer_d2h_s=f(row.get("transfer_d2h_s", "")),
+        transfer_total_s=f(row.get("transfer_total_s", "")),
         white_percent=f(row.get("white_percent", "")),
         white_pixels=i(row.get("white_pixels", "")),
         total_pixels=i(row.get("total_pixels", "")),
@@ -396,7 +432,7 @@ def update_aggregate_rows(csv_path: Path, new_rows: list[SummaryRow]) -> list[Su
     replacement_keys = {row.method_key for row in new_rows}
     kept = [row for row in old_rows if row.method_key not in replacement_keys]
     combined = kept + new_rows
-    order = {"secuencial": 0, "numpy": 1, "numba_cpu": 2}
+    order = {"secuencial": 0, "numpy": 1, "numba_cpu": 2, "numba_gpu": 3}
     combined.sort(key=lambda row: order.get(row.method_key, 99))
     write_csv_rows(csv_path, combined)
     return combined
@@ -465,6 +501,7 @@ def write_results_md(
         f"- GIL habilitado: {env['gil_enabled']}",
         f"- NumPy: {env['numpy']}",
         f"- Numba: {env['numba']}",
+        f"- GPU CUDA: {env.get('gpu_cuda', 'no detectada')}",
         "",
         "## Tabla solicitada",
         "",
@@ -552,12 +589,46 @@ def write_results_md(
                 )
             lines.append("")
 
+    if any(row.transfer_total_s is not None for row in rows):
+        lines.extend(
+            [
+                "## Transferencias CPU-GPU",
+                "",
+                "Estos tiempos se registran aparte para analizar el costo de mover datos entre host y dispositivo. No se suman en la columna de tiempo total solicitada, que mide solamente conversion RGB->gris y Sobel.",
+                "",
+                "| metodo | H2D CPU->GPU (s) | D2H GPU->CPU (s) | transferencia total (s) | computo total (s) | total con transferencias (s) |",
+                "|---|---:|---:|---:|---:|---:|",
+            ]
+        )
+        for row in rows:
+            if row.transfer_total_s is None:
+                continue
+            total_with_transfer = None
+            if row.total_s is not None:
+                total_with_transfer = row.total_s + row.transfer_total_s
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        md_escape(row.method_label),
+                        format_float(row.transfer_h2d_s),
+                        format_float(row.transfer_d2h_s),
+                        format_float(row.transfer_total_s),
+                        format_float(row.total_s),
+                        format_float(total_with_transfer),
+                    ]
+                )
+                + " |"
+            )
+        lines.append("")
+
     lines.extend(
         [
             "## Notas",
             "",
             "- Los tiempos excluyen generacion de imagen y cualquier I/O; solo se mide conversion RGB->gris y Sobel.",
             "- La imagen de entrada se carga desde imagenes/ y la carga queda fuera de la medicion.",
+            "- Para Numba GPU, las transferencias CPU-GPU se registran aparte para responder el analisis de la entrega 2.",
             "- Speed-up = tiempo total secuencial promedio / tiempo total del metodo promedio.",
             "- Performance (%) = speed-up / unidades usadas * 100. Para Numba CPU se usan los hilos configurados; para secuencial y NumPy se usa 1 unidad explicita.",
             "- Si todavia no aparece la fila secuencial, speed-up y performance quedan vacios porque falta la referencia.",
@@ -693,6 +764,39 @@ def write_method_final_md(
             )
             + " |"
         )
+
+    if any(row.transfer_total_s is not None for row in method_rows):
+        lines.extend(
+            [
+                "",
+                "## Transferencias CPU-GPU",
+                "",
+                "Estos tiempos se registran aparte para analizar el costo de mover datos entre host y dispositivo.",
+                "",
+                "| tamanio | H2D CPU->GPU (s) | D2H GPU->CPU (s) | transferencia total (s) | computo total (s) | total con transferencias (s) |",
+                "|---:|---:|---:|---:|---:|---:|",
+            ]
+        )
+        for row in method_rows:
+            if row.transfer_total_s is None:
+                continue
+            total_with_transfer = None
+            if row.total_s is not None:
+                total_with_transfer = row.total_s + row.transfer_total_s
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        f"{row.size}x{row.size}",
+                        format_float(row.transfer_h2d_s),
+                        format_float(row.transfer_d2h_s),
+                        format_float(row.transfer_total_s),
+                        format_float(row.total_s),
+                        format_float(total_with_transfer),
+                    ]
+                )
+                + " |"
+            )
 
     lines.extend(
         [

@@ -1,0 +1,3 @@
+timestamp,method_key,method_label,size,runs,workers,seed,rgb_to_gray_s,sobel_s,total_s,transfer_h2d_s,transfer_d2h_s,transfer_total_s,white_percent,white_pixels,total_pixels,checksum,output_hash,status,error
+2026-05-18T11:55:41,numba_cpu,Numba paralelo CPU,6000,5,6,2026,0.012564102,0.014838666,0.027402768,,,,0.000000000,0,36000000,109936717,d8af6b4c711617e3,ok,
+2026-05-18T11:55:26,numba_gpu,Numba GPU,6000,5,256,2026,0.003972846,0.017431958,0.021404804,0.011005898,0.005106834,0.016112732,0.000000000,0,36000000,109937633,72c64699d639c009,ok,

@@ -1,8 +1,9 @@
-"""Benchmark por partes para la entrega 1 del TP de Sobel.
+"""Benchmark por partes para el TP de Sobel.
 
 Ejemplos:
     python benchmark_sobel.py --size 750 --methods secuencial,numpy,numba_cpu --runs 5
     python benchmark_sobel.py --size 3000 --methods numba_cpu --runs 5 --workers 8
+    python benchmark_sobel.py --size 6000 --methods numba_gpu --runs 5 --output-dir ../resultados/entrega2
 """
 
 import argparse
@@ -176,6 +177,83 @@ def run_numba_cpu(
     return row, measurements
 
 
+def run_numba_gpu(
+    size: int,
+    runs: int,
+    seed: int,
+    output_dir: Path,
+    input_dir: Path,
+) -> tuple[SummaryRow, list[RunMeasurement]]:
+    import numpy as np
+    from numba import cuda
+
+    from sobel_numba_gpu import (
+        THREADS_PER_BLOCK,
+        blocks_per_grid,
+        rgb_to_gray_cuda,
+        sobel_cuda,
+        warmup_numba_gpu,
+    )
+
+    print("[Progreso] Numba GPU: compilando kernels fuera de la medicion", flush=True)
+    warmup_numba_gpu()
+    print(f"[Progreso] Numba GPU {size}x{size}: cargando imagen fuera de la medicion", flush=True)
+    rgb_bytes = load_rgb_image_bytes(input_dir, size)
+    rgb = np.frombuffer(rgb_bytes, dtype=np.uint8).reshape((size, size, 3))
+    blocks = blocks_per_grid(size, size)
+    threads_per_block = THREADS_PER_BLOCK[0] * THREADS_PER_BLOCK[1]
+
+    measurements: list[RunMeasurement] = []
+    last_sobel: object | None = None
+    for run_index in range(1, runs + 1):
+        print(f"[Progreso] Numba GPU {size}x{size} corrida {run_index}/{runs}: midiendo", flush=True)
+
+        transfer_in_start = perf_counter()
+        rgb_device = cuda.to_device(rgb)
+        gray_device = cuda.device_array((size, size), dtype=np.uint8)
+        sobel_device = cuda.device_array((size, size), dtype=np.uint8)
+        cuda.synchronize()
+        transfer_in_s = perf_counter() - transfer_in_start
+
+        t0 = perf_counter()
+        rgb_to_gray_cuda[blocks, THREADS_PER_BLOCK](rgb_device, gray_device)
+        cuda.synchronize()
+        t1 = perf_counter()
+        sobel_cuda[blocks, THREADS_PER_BLOCK](gray_device, sobel_device)
+        cuda.synchronize()
+        t2 = perf_counter()
+
+        transfer_out_start = perf_counter()
+        sobel = sobel_device.copy_to_host()
+        cuda.synchronize()
+        transfer_out_s = perf_counter() - transfer_out_start
+        last_sobel = sobel
+
+        white_pixels, total_pixels, white_percent, checksum, output_hash = output_metrics(sobel)
+        measurements.append(
+            RunMeasurement(
+                run_index=run_index,
+                rgb_to_gray_s=t1 - t0,
+                sobel_s=t2 - t1,
+                total_s=(t1 - t0) + (t2 - t1),
+                white_pixels=white_pixels,
+                total_pixels=total_pixels,
+                white_percent=white_percent,
+                checksum=checksum,
+                output_hash=output_hash,
+                transfer_h2d_s=transfer_in_s,
+                transfer_d2h_s=transfer_out_s,
+                transfer_total_s=transfer_in_s + transfer_out_s,
+            )
+        )
+    if last_sobel is not None:
+        path = sobel_image_path(output_dir, size, "numba_gpu")
+        write_gray_png(last_sobel, size, size, path)
+        print(f"[Progreso] Imagen Sobel guardada: {path}", flush=True)
+    row = average_measurements("numba_gpu", size, runs, threads_per_block, seed, measurements)
+    return row, measurements
+
+
 def run_method(
     method_key: str,
     size: int,
@@ -192,6 +270,8 @@ def run_method(
             return run_numpy(size, runs, seed, output_dir, input_dir)
         if method_key == "numba_cpu":
             return run_numba_cpu(size, runs, seed, workers, output_dir, input_dir)
+        if method_key == "numba_gpu":
+            return run_numba_gpu(size, runs, seed, output_dir, input_dir)
     except Exception as exc:
         row = SummaryRow(
             timestamp="",
@@ -235,7 +315,7 @@ def main() -> None:
         "--methods",
         type=parse_method_list,
         default=["secuencial"],
-        help="Metodos separados por coma: secuencial,numpy,numba_cpu. Default: secuencial.",
+        help="Metodos separados por coma: secuencial,numpy,numba_cpu,numba_gpu. Default: secuencial.",
     )
     parser.add_argument("--runs", type=int, default=5, help="Cantidad de corridas. Consigna: minimo 5.")
     parser.add_argument("--seed", type=int, default=2026, help="Seed registrada en resultados para reproducibilidad.")
