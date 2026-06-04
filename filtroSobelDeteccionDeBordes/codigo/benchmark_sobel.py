@@ -4,6 +4,7 @@ Ejemplos:
     python benchmark_sobel.py --size 750 --methods secuencial,numpy,numba_cpu --runs 5
     python benchmark_sobel.py --size 3000 --methods numba_cpu --runs 5 --workers 8
     python benchmark_sobel.py --size 6000 --methods numba_gpu --runs 5 --output-dir ../resultados/entrega2
+    python benchmark_sobel.py --size 6000 --methods pytorch_cpu,pytorch_gpu --runs 5 --output-dir ../resultados/entrega3
 """
 
 import argparse
@@ -254,6 +255,145 @@ def run_numba_gpu(
     return row, measurements
 
 
+def run_pytorch_cpu(
+    size: int,
+    runs: int,
+    seed: int,
+    workers: int | None,
+    output_dir: Path,
+    input_dir: Path,
+) -> tuple[SummaryRow, list[RunMeasurement]]:
+    import numpy as np
+    import torch
+
+    from sobel_pytorch import (
+        rgb_to_gray_torch,
+        set_torch_workers,
+        sobel_kernels,
+        sobel_torch,
+        warmup_pytorch_cpu,
+    )
+
+    effective_workers = set_torch_workers(workers)
+    print("[Progreso] PyTorch CPU: ejecutando warmup fuera de la medicion", flush=True)
+    warmup_pytorch_cpu()
+    print(f"[Progreso] PyTorch CPU {size}x{size}: cargando imagen fuera de la medicion", flush=True)
+    rgb_bytes = load_rgb_image_bytes(input_dir, size)
+    rgb = np.frombuffer(rgb_bytes, dtype=np.uint8).reshape((size, size, 3))
+    rgb_tensor = torch.from_numpy(rgb.copy())
+    kernel_x, kernel_y = sobel_kernels(torch.device("cpu"))
+
+    measurements: list[RunMeasurement] = []
+    last_sobel: object | None = None
+    for run_index in range(1, runs + 1):
+        print(f"[Progreso] PyTorch CPU {size}x{size} corrida {run_index}/{runs}: midiendo", flush=True)
+        t0 = perf_counter()
+        gray = rgb_to_gray_torch(rgb_tensor)
+        t1 = perf_counter()
+        sobel_tensor = sobel_torch(gray, kernel_x, kernel_y)
+        t2 = perf_counter()
+        sobel = sobel_tensor.numpy()
+        last_sobel = sobel
+
+        white_pixels, total_pixels, white_percent, checksum, output_hash = output_metrics(sobel)
+        measurements.append(
+            RunMeasurement(
+                run_index=run_index,
+                rgb_to_gray_s=t1 - t0,
+                sobel_s=t2 - t1,
+                total_s=(t1 - t0) + (t2 - t1),
+                white_pixels=white_pixels,
+                total_pixels=total_pixels,
+                white_percent=white_percent,
+                checksum=checksum,
+                output_hash=output_hash,
+            )
+        )
+    if last_sobel is not None:
+        path = sobel_image_path(output_dir, size, "pytorch_cpu")
+        write_gray_png(last_sobel, size, size, path)
+        print(f"[Progreso] Imagen Sobel guardada: {path}", flush=True)
+    row = average_measurements("pytorch_cpu", size, runs, effective_workers, seed, measurements)
+    return row, measurements
+
+
+def run_pytorch_gpu(
+    size: int,
+    runs: int,
+    seed: int,
+    output_dir: Path,
+    input_dir: Path,
+) -> tuple[SummaryRow, list[RunMeasurement]]:
+    import numpy as np
+    import torch
+
+    from sobel_pytorch import (
+        ensure_torch_cuda_available,
+        rgb_to_gray_torch,
+        sobel_kernels,
+        sobel_torch,
+        warmup_pytorch_gpu,
+    )
+
+    ensure_torch_cuda_available()
+    device = torch.device("cuda")
+    print("[Progreso] PyTorch GPU: ejecutando warmup fuera de la medicion", flush=True)
+    warmup_pytorch_gpu()
+    print(f"[Progreso] PyTorch GPU {size}x{size}: cargando imagen fuera de la medicion", flush=True)
+    rgb_bytes = load_rgb_image_bytes(input_dir, size)
+    rgb = np.frombuffer(rgb_bytes, dtype=np.uint8).reshape((size, size, 3))
+    rgb_host = torch.from_numpy(rgb.copy())
+    kernel_x, kernel_y = sobel_kernels(device)
+
+    measurements: list[RunMeasurement] = []
+    last_sobel: object | None = None
+    for run_index in range(1, runs + 1):
+        print(f"[Progreso] PyTorch GPU {size}x{size} corrida {run_index}/{runs}: midiendo", flush=True)
+
+        transfer_in_start = perf_counter()
+        rgb_device = rgb_host.to(device)
+        torch.cuda.synchronize()
+        transfer_in_s = perf_counter() - transfer_in_start
+
+        t0 = perf_counter()
+        gray_device = rgb_to_gray_torch(rgb_device)
+        torch.cuda.synchronize()
+        t1 = perf_counter()
+        sobel_device = sobel_torch(gray_device, kernel_x, kernel_y)
+        torch.cuda.synchronize()
+        t2 = perf_counter()
+
+        transfer_out_start = perf_counter()
+        sobel = sobel_device.cpu().numpy()
+        torch.cuda.synchronize()
+        transfer_out_s = perf_counter() - transfer_out_start
+        last_sobel = sobel
+
+        white_pixels, total_pixels, white_percent, checksum, output_hash = output_metrics(sobel)
+        measurements.append(
+            RunMeasurement(
+                run_index=run_index,
+                rgb_to_gray_s=t1 - t0,
+                sobel_s=t2 - t1,
+                total_s=(t1 - t0) + (t2 - t1),
+                white_pixels=white_pixels,
+                total_pixels=total_pixels,
+                white_percent=white_percent,
+                checksum=checksum,
+                output_hash=output_hash,
+                transfer_h2d_s=transfer_in_s,
+                transfer_d2h_s=transfer_out_s,
+                transfer_total_s=transfer_in_s + transfer_out_s,
+            )
+        )
+    if last_sobel is not None:
+        path = sobel_image_path(output_dir, size, "pytorch_gpu")
+        write_gray_png(last_sobel, size, size, path)
+        print(f"[Progreso] Imagen Sobel guardada: {path}", flush=True)
+    row = average_measurements("pytorch_gpu", size, runs, 1, seed, measurements)
+    return row, measurements
+
+
 def run_method(
     method_key: str,
     size: int,
@@ -272,6 +412,10 @@ def run_method(
             return run_numba_cpu(size, runs, seed, workers, output_dir, input_dir)
         if method_key == "numba_gpu":
             return run_numba_gpu(size, runs, seed, output_dir, input_dir)
+        if method_key == "pytorch_cpu":
+            return run_pytorch_cpu(size, runs, seed, workers, output_dir, input_dir)
+        if method_key == "pytorch_gpu":
+            return run_pytorch_gpu(size, runs, seed, output_dir, input_dir)
     except Exception as exc:
         row = SummaryRow(
             timestamp="",
@@ -315,7 +459,7 @@ def main() -> None:
         "--methods",
         type=parse_method_list,
         default=["secuencial"],
-        help="Metodos separados por coma: secuencial,numpy,numba_cpu,numba_gpu. Default: secuencial.",
+        help="Metodos separados por coma: secuencial,numpy,numba_cpu,numba_gpu,pytorch_cpu,pytorch_gpu. Default: secuencial.",
     )
     parser.add_argument("--runs", type=int, default=5, help="Cantidad de corridas. Consigna: minimo 5.")
     parser.add_argument("--seed", type=int, default=2026, help="Seed registrada en resultados para reproducibilidad.")
@@ -323,7 +467,7 @@ def main() -> None:
         "--workers",
         type=int,
         default=os.cpu_count() or 1,
-        help="Hilos para Numba CPU. No afecta secuencial ni NumPy.",
+        help="Hilos para Numba CPU y PyTorch CPU. No afecta secuencial, NumPy ni GPU.",
     )
     parser.add_argument(
         "--output-dir",

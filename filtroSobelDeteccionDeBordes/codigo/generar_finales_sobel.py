@@ -2,7 +2,7 @@
 
 Uso:
     python generar_finales_sobel.py
-    python generar_finales_sobel.py --methods secuencial,numpy,numba_cpu
+    python generar_finales_sobel.py --methods secuencial,numpy,numba_cpu,pytorch_cpu,pytorch_gpu
 """
 
 import argparse
@@ -22,7 +22,7 @@ def main() -> None:
         "--methods",
         type=parse_method_list,
         default=list(METHOD_LABELS),
-        help="Metodos separados por coma: secuencial,numpy,numba_cpu.",
+        help="Metodos separados por coma: secuencial,numpy,numba_cpu,numba_gpu,pytorch_cpu,pytorch_gpu.",
     )
     parser.add_argument(
         "--output-dir",

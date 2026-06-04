@@ -1,0 +1,3 @@
+timestamp,method_key,method_label,size,runs,workers,seed,rgb_to_gray_s,sobel_s,total_s,transfer_h2d_s,transfer_d2h_s,transfer_total_s,white_percent,white_pixels,total_pixels,checksum,output_hash,status,error
+2026-06-04T11:54:53,pytorch_cpu,PyTorch CPU,6000,5,6,2026,0.229954857,0.652591036,0.882545894,,,,0.000000000,0,36000000,109935099,d863f4ab4aefc06f,ok,
+2026-06-04T11:55:17,pytorch_gpu,PyTorch GPU,6000,5,1,2026,0.014273170,0.014200254,0.028473424,0.009765902,0.005081250,0.014847152,0.000000000,0,36000000,109935099,d863f4ab4aefc06f,ok,

@@ -19,6 +19,8 @@ METHOD_LABELS = {
     "numpy": "NumPy",
     "numba_cpu": "Numba paralelo CPU",
     "numba_gpu": "Numba GPU",
+    "pytorch_cpu": "PyTorch CPU",
+    "pytorch_gpu": "PyTorch GPU",
 }
 
 
@@ -312,7 +314,9 @@ def environment_info() -> dict[str, str]:
         "gil_enabled": str(gil_value),
         "numpy": package_version("numpy"),
         "numba": package_version("numba"),
+        "pytorch": package_version("torch"),
         "gpu_cuda": gpu_cuda_info(),
+        "pytorch_cuda": pytorch_cuda_info(),
     }
 
 
@@ -325,6 +329,19 @@ def gpu_cuda_info() -> str:
         device = cuda.get_current_device()
         name = device.name.decode() if isinstance(device.name, bytes) else device.name
         return str(name)
+    except Exception as exc:
+        return f"no detectada ({exc})"
+
+
+def pytorch_cuda_info() -> str:
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return "CUDA no disponible para PyTorch"
+        device_name = torch.cuda.get_device_name(0)
+        cuda_version = torch.version.cuda or "sin version CUDA"
+        return f"{device_name} (CUDA {cuda_version})"
     except Exception as exc:
         return f"no detectada ({exc})"
 
@@ -432,7 +449,7 @@ def update_aggregate_rows(csv_path: Path, new_rows: list[SummaryRow]) -> list[Su
     replacement_keys = {row.method_key for row in new_rows}
     kept = [row for row in old_rows if row.method_key not in replacement_keys]
     combined = kept + new_rows
-    order = {"secuencial": 0, "numpy": 1, "numba_cpu": 2, "numba_gpu": 3}
+    order = {"secuencial": 0, "numpy": 1, "numba_cpu": 2, "numba_gpu": 3, "pytorch_cpu": 4, "pytorch_gpu": 5}
     combined.sort(key=lambda row: order.get(row.method_key, 99))
     write_csv_rows(csv_path, combined)
     return combined
@@ -451,7 +468,7 @@ def speedup_and_performance(rows: list[SummaryRow]) -> dict[str, tuple[float | N
         baseline = baseline_by_size.get(row.size)
         if baseline and row.status == "ok" and row.total_s and row.total_s > 0:
             speedup = baseline / row.total_s
-            units = row.workers if row.method_key == "numba_cpu" else 1
+            units = row.workers if row.method_key in {"numba_cpu", "pytorch_cpu"} else 1
             if units > 0:
                 performance = (speedup / units) * 100.0
         out[f"{row.method_key}:{row.size}"] = (speedup, performance)
@@ -501,7 +518,9 @@ def write_results_md(
         f"- GIL habilitado: {env['gil_enabled']}",
         f"- NumPy: {env['numpy']}",
         f"- Numba: {env['numba']}",
+        f"- PyTorch: {env['pytorch']}",
         f"- GPU CUDA: {env.get('gpu_cuda', 'no detectada')}",
+        f"- PyTorch CUDA: {env.get('pytorch_cuda', 'no detectada')}",
         "",
         "## Tabla solicitada",
         "",
@@ -628,9 +647,9 @@ def write_results_md(
             "",
             "- Los tiempos excluyen generacion de imagen y cualquier I/O; solo se mide conversion RGB->gris y Sobel.",
             "- La imagen de entrada se carga desde imagenes/ y la carga queda fuera de la medicion.",
-            "- Para Numba GPU, las transferencias CPU-GPU se registran aparte para responder el analisis de la entrega 2.",
+            "- Para Numba GPU y PyTorch GPU, las transferencias CPU-GPU se registran aparte para responder el analisis de las entregas GPU.",
             "- Speed-up = tiempo total secuencial promedio / tiempo total del metodo promedio.",
-            "- Performance (%) = speed-up / unidades usadas * 100. Para Numba CPU se usan los hilos configurados; para secuencial y NumPy se usa 1 unidad explicita.",
+            "- Performance (%) = speed-up / unidades usadas * 100. Para Numba CPU y PyTorch CPU se usan los hilos configurados; para los demas metodos se usa 1 unidad explicita.",
             "- Si todavia no aparece la fila secuencial, speed-up y performance quedan vacios porque falta la referencia.",
             "",
         ]
@@ -705,6 +724,7 @@ def write_method_final_md(
                 f"- GIL habilitado: {env['gil_enabled']}",
                 f"- NumPy: {env['numpy']}",
                 f"- Numba: {env['numba']}",
+                f"- PyTorch: {env['pytorch']}",
             ]
         )
 

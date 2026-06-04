@@ -7,6 +7,8 @@ Para la entrega del 7/05 se implementaron tres versiones:
 - `sobel_secuencial.py`: version secuencial pura con bucles Python, sin importar modulos ni librerias.
 - `sobel_numpy.py`: version vectorizada con NumPy.
 - `sobel_numba_cpu.py`: version Numba CPU con `njit(parallel=True)` y `prange`.
+- `sobel_numba_gpu.py`: version Numba GPU con `numba.cuda`.
+- `sobel_pytorch.py`: versiones PyTorch CPU y PyTorch GPU con tensores y `conv2d`.
 - `benchmark_sobel.py`: script para correr benchmarks por partes y generar Markdown/CSV.
 - `generar_finales_sobel.py`: script para juntar CSV existentes y generar finales por metodo.
 
@@ -154,9 +156,9 @@ La performance se calcula siguiendo la idea de eficiencia del libro:
 performance (%) = speed-up / unidades usadas * 100
 ```
 
-Para Numba CPU, las unidades usadas son los hilos configurados con `--workers`.
-Para secuencial y NumPy se usa 1 unidad explicita, porque no estamos controlando manualmente
-workers en esas versiones.
+Para Numba CPU y PyTorch CPU, las unidades usadas son los hilos configurados con `--workers`.
+Para secuencial, NumPy y las versiones GPU se usa 1 unidad explicita, porque no estamos
+comparando los hilos internos de GPU como si fueran equivalentes a nucleos CPU.
 
 ## Como correr por partes
 
@@ -289,3 +291,60 @@ Se incluye `numba_cpu` en la misma carpeta de resultados para poder comparar dir
 Se usa `--workers 6` en Numba CPU porque el procesador tiene 6 nucleos fisicos. Aunque el sistema
 muestre 12 hilos logicos, esos hilos comparten recursos internos de los mismos nucleos, por lo que
 6 workers es una configuracion mas conservadora y facil de justificar en el informe.
+
+# Entrega 3: PyTorch CPU y PyTorch GPU
+
+Para la entrega del 28 de mayo se agregan los metodos `pytorch_cpu` y `pytorch_gpu`.
+La fuente conceptual principal es el libro de la catedra: primero presenta PyTorch como continuidad
+del trabajo sobre tensores en CPU, y luego muestra que el cambio a GPU consiste en mover esos
+tensores al dispositivo `cuda` y sincronizar cuando se miden operaciones asincronicas.
+
+La implementacion tambien toma como referencia el codigo compartido por el docente:
+
+- se trabaja con tensores PyTorch;
+- la imagen RGB se convierte a gris con la misma luminancia de la consigna;
+- Sobel se expresa como una convolucion 2D con las mascaras `Gx` y `Gy`;
+- en CPU se usa `torch.set_num_threads(...)` con el valor de `--workers`;
+- en GPU se usa `torch.device("cuda")` y se llama a `torch.cuda.synchronize()` antes de cerrar cada medicion.
+
+Para mantener la salida comparable con las versiones anteriores, `conv2d` se aplica sobre la zona
+interior y los bordes quedan en 0, igual que en secuencial, NumPy, Numba CPU y Numba GPU.
+
+Los tiempos solicitados por la consigna siguen siendo:
+
+- RGB -> gris;
+- Sobel;
+- total de computo.
+
+Ademas, para PyTorch GPU se registran aparte:
+
+- transferencia CPU -> GPU;
+- transferencia GPU -> CPU;
+- transferencia total.
+
+Esos tiempos no se suman en la columna `tiempo total (s)` de la tabla solicitada, pero sirven para
+responder si la GPU amortiza o no el costo de mover datos.
+
+## Comandos para ejecutar entrega 3
+
+Desde la carpeta `codigo`:
+
+```bash
+python benchmark_sobel.py --size 750 --methods pytorch_cpu,pytorch_gpu --runs 5 --workers 6 --output-dir ../resultados/entrega3
+python benchmark_sobel.py --size 1500 --methods pytorch_cpu,pytorch_gpu --runs 5 --workers 6 --output-dir ../resultados/entrega3
+python benchmark_sobel.py --size 3000 --methods pytorch_cpu,pytorch_gpu --runs 5 --workers 6 --output-dir ../resultados/entrega3
+python benchmark_sobel.py --size 6000 --methods pytorch_cpu,pytorch_gpu --runs 5 --workers 6 --output-dir ../resultados/entrega3
+```
+
+Si queres comparar directamente con las mejores versiones anteriores dentro de la misma carpeta de
+resultados, podes incluir tambien `numba_cpu` y `numba_gpu`:
+
+```bash
+python benchmark_sobel.py --size 750 --methods numba_cpu,numba_gpu,pytorch_cpu,pytorch_gpu --runs 5 --workers 6 --output-dir ../resultados/entrega3
+```
+
+Para regenerar finales desde los CSV de entrega 3:
+
+```bash
+python generar_finales_sobel.py --methods pytorch_cpu,pytorch_gpu --output-dir ../resultados/entrega3
+```
