@@ -211,10 +211,12 @@ video4k/resultados/videos/posterize_pytorch_gpu_sin_audio.mp4
 Como el video original no tiene una pista de audio detectable, no se conservan versiones
 `*_con_audio.mp4`.
 
-Para abrir el video secuencial generado con `mpv`:
+Para abrir los videos generados con `mpv`:
 
 ```bash
 mpv /home/ro/Desktop/facu/SistemasParalelos/video4k/resultados/videos/posterize_secuencial_sin_audio.mp4
+mpv /home/ro/Desktop/facu/SistemasParalelos/video4k/resultados/videos/posterize_pytorch_cpu_sin_audio.mp4
+mpv /home/ro/Desktop/facu/SistemasParalelos/video4k/resultados/videos/posterize_pytorch_gpu_sin_audio.mp4
 ```
 
 ## Fusion de resultados
